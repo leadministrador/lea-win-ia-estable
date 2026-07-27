@@ -24,7 +24,7 @@ button{width:100%;padding:13px;margin-top:11px;border:0;border-radius:11px;backg
 .manual-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .checks{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:6px}
 .check{display:flex;align-items:center;gap:6px;padding:7px;border:1px solid var(--l);border-radius:8px;background:var(--d);font-size:11px}
-.check input{width:auto;margin:0}.inline{display:grid;grid-template-columns:1fr auto;gap:6px}.inline button{width:auto;margin:0;padding:10px}
+.check input{width:auto;margin:0}.check.retiro-activo{border-color:var(--r);background:#2a1010;color:#ffb3b3}.retiros-resumen{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.retiros-resumen button{width:auto;margin:0;padding:10px 14px}.inline{display:grid;grid-template-columns:1fr auto;gap:6px}.inline button{width:auto;margin:0;padding:10px}
 .value-note{font-size:11px;color:var(--m);margin-top:5px}
 .chip{font-size:10px;background:#183526;border:1px solid var(--l);padding:4px 7px;border-radius:20px}.official{margin-top:10px;padding:12px;border:1px solid var(--g);border-radius:12px;background:#0a1a11}.official h3{margin:0 0 8px;font-size:15px;color:var(--g)}.official-row{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--l)}.official-row:last-child{border-bottom:0}.place{display:inline-grid;place-items:center;min-width:38px;height:30px;border-radius:8px;background:var(--g);color:#06100b;font-weight:900}.race-media{margin-top:14px;padding-top:12px;border-top:1px solid var(--l)}.race-media h3{margin:0 0 9px;color:var(--g)}.race-media iframe{width:100%;aspect-ratio:16/9;height:auto;border:1px solid var(--l);border-radius:10px;background:#000}
 @media(max-width:500px){.facts,.manual-grid,.checks{grid-template-columns:1fr}}
@@ -47,7 +47,17 @@ button{width:100%;padding:13px;margin-top:11px;border:0;border-radius:11px;backg
 <div><label>Viento</label><select id="viento"><option selected>Sin viento</option><option>Suave</option><option>Moderado</option><option>Fuerte</option><option>Sin confirmar</option></select></div>
 <div><label>Dirección del viento</label><select id="direccionViento"><option selected>Sin dirección</option><option>De frente</option><option>De cola</option><option>Lateral</option><option>Variable</option><option>Sin confirmar</option></select></div>
 <div><label>Temperatura</label><select id="temperatura"><option selected>Normal</option><option>Fría</option><option>Calurosa</option><option>Muy calurosa</option><option>Sin confirmar</option></select></div>
-<div><label>Retiros</label><input id="retiros" placeholder="Ej.: 3, 8" oninput="aplicarRetiros()"></div>
+<div>
+<label>Borrados/retiros</label>
+<div class="retiros-resumen">
+<strong id="retirosResumen">0 seleccionados</strong>
+<button class="secondary" type="button" onclick="toggleRetiros()">Editar</button>
+</div>
+<div id="retirosPanel" class="manual hidden">
+<div id="retirosChecks" class="checks"></div>
+</div>
+<input id="retiros" type="hidden">
+</div>
 <div><label>Observaciones</label><input id="observaciones" placeholder="Cambios generales de último momento"></div></div>
 <div id="meta" class="status">Primero cargá una carrera.</div><div id="resultadoOficial" class="hidden"></div>
 <datalist id="jockeysCarrera"></datalist><datalist id="herrajesLista"></datalist><div id="lista"></div>
@@ -202,9 +212,40 @@ async function guardarCodigoHerraje(i){
  const d=await r.json();if(d.ok){actual.participantes[i].herraje=codigo;await cargarHerrajes();input.value=codigo}
 }
 
-function aplicarRetiros(){if(!actual)return;const set=new Set(retiros.value.split(',').map(x=>x.trim()).filter(Boolean));actual.participantes.forEach(p=>p.retirado=set.has(String(p.numero)));render()}
+function toggleRetiros(){
+ retirosPanel.classList.toggle('hidden');
+}
+function sincronizarRetiros(){
+ if(!actual)return;
+ const seleccionados=actual.participantes.filter(p=>p.retirado);
+ retiros.value=seleccionados.map(p=>p.numero).join(',');
+ retirosResumen.textContent=`${seleccionados.length} seleccionados`;
+}
+function cambiarRetiro(indice,marcado){
+ if(!actual)return;
+ actual.participantes[indice].retirado=marcado;
+ sincronizarRetiros();
+ render();
+}
+function renderRetiros(){
+ if(!actual)return;
+ sincronizarRetiros();
+ retirosChecks.innerHTML=actual.participantes.map((p,i)=>`
+  <label class="check ${p.retirado?'retiro-activo':''}">
+   <input type="checkbox" ${p.retirado?'checked':''} onchange="cambiarRetiro(${i},this.checked)">
+   N.º ${esc(p.numero||'?')} · ${esc(p.nombre||'Sin nombre')}
+  </label>
+ `).join('');
+}
+function aplicarRetiros(){
+ if(!actual)return;
+ const set=new Set(retiros.value.split(',').map(x=>x.trim()).filter(Boolean));
+ actual.participantes.forEach(p=>p.retirado=set.has(String(p.numero)));
+ sincronizarRetiros();
+}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function render(){
+ renderRetiros();
  jockeysCarrera.innerHTML=[...new Set(actual.participantes.map(p=>p.jockey).filter(Boolean))].map(x=>`<option value="${esc(x)}"></option>`).join('');
  herrajesLista.innerHTML=herrajesCodigos.map(x=>`<option value="${esc(x)}"></option>`).join('');
  lista.innerHTML=actual.participantes.map((p,i)=>{
